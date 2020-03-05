@@ -1,0 +1,125 @@
+---
+title: "Final Project"
+author: "Jennifer Frediani"
+date: "3/4/2020"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+```{r}
+#load data from SPSS
+library(ggplot2)
+library(dplyr)
+library(haven)
+hints4cycle2_09062017_public_edited <- read_sav("~/CPTR-NRSG 741/HINTS4-Cycle2-SPSS/hints4cycle2_09062017_public_edited.sav")
+hints4cycle2 <- hints4cycle2_09062017_public_edited
+```
+These data are from the Health Information National Trends Survey (HINTS)data from the National Cancer Institute.  I chose HINTS 4 Cycle 2 as a starting point for these analyses because it had questions on BMI, cancer history, questions pertaining to screening history and information on diet and exercise. I am interested in exploring relationships between healthy lifestyle behaviors and incidence of prostate cancer in people with and without a family history. 
+
+This loaded dataset was simplified in SPSS before importing to R.
+
+```{r}
+# Now to explore
+
+class(hints4cycle2)
+dim(hints4cycle2)
+```
+
+There are 3630 observations in this dataset. For now we will limit the dataset to only those that have or had prostate cancer.
+
+```{r}
+hints4cycle2 %>%
+ filter(CaProstate == 1) %>%
+ nrow()
+```
+There are 60 participants that have or had prostate cancer. We'll now look at of those 60 who has a family history of cancer.
+
+```{r}
+hints4cycle2 %>%
+ filter(CaProstate == 1) %>%
+  filter(FamilyEverHadCancer == 1) %>%
+ nrow()
+```
+Well, the majority of those who have/had prostate cancer also had a family history of cancer. So let's look at healthy behaviors in those with prostate cancer.
+
+```{r}
+#fruit intake  (3 = at least 2 cups)
+hints4cycle2 %>%
+ filter(CaProstate == 1) %>%
+  filter(Fruit == 3) %>%
+  nrow ()
+```
+```{r}
+#vegetable intake (4 = at least 3 cups)
+hints4cycle2 %>%
+ filter(CaProstate == 1) %>%
+  filter(Vegetables == 4) %>%
+  nrow ()
+```
+So we have poor fruit and vegetable intake, not suprising, how are they doing with exercise...
+
+```{r}
+# First we have to calculate whether they meet the PA guidelines 
+#meetExGuide <- 0
+ # for(PersonID in hints4cycle2) {
+  #  meetExGuide <- hints4cycle2$TimesModerateExercise * hints4cycle2$HowLongModerateExerciseHr
+  #}  
+# print(meetExGuide)
+
+#exercise (moderate by hour)
+hints4cycle2 %>%
+ filter(CaProstate == 1) %>%
+  filter(HowLongModerateExerciseHr > 2) %>%
+  nrow ()
+```
+Not many...
+
+Now let's look at those with a family history of cancer but have not had cancer yet.
+
+```{r}
+hints4cycle2 %>%
+  filter(FamilyEverHadCancer == 1) %>%
+  filter(EverHadCancer == 2)%>%
+ nrow()
+```
+```{r}
+#fruit intake  (3 = at least 2 cups)
+hints4cycle2 %>%
+ filter(FamilyEverHadCancer == 1) %>%
+  filter(EverHadCancer == 2)%>%
+  filter(Fruit == 3) %>%
+  nrow ()
+```
+```{r}
+#vegetable intake  (4 = at least 3 cups)
+hints4cycle2 %>%
+ filter(FamilyEverHadCancer == 1) %>%
+  filter(EverHadCancer == 2)%>%
+  filter(Vegetables == 4) %>%
+  nrow ()
+```
+```{r}
+#exercise
+hints4cycle2 %>%
+ filter(FamilyEverHadCancer == 1) %>%
+  filter(EverHadCancer == 2)%>%
+   filter(HowLongModerateExerciseHr > 2) %>%
+  nrow ()
+```
+
+```{r}
+hints4cycle2$EverHadCancer <- as.numeric(hints4cycle2$EverHadCancer)
+ggplot(hints4cycle2, aes(x=Fruit, y=Vegetables, color=EverHadCancer)) 
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
