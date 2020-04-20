@@ -1,5 +1,5 @@
 ---
-title: "Final Project"
+title: "Final Project 741: Fruit and Vegetable Intake is associated with a family history of cancer"
 author: "Jennifer Frediani"
 date: "3/4/2020"
 output: word_document
@@ -13,31 +13,152 @@ knitr::opts_chunk$set(echo = FALSE)
 library(ggplot2)
 library(dplyr)
 library(haven)
-hints4cycle2_09062017_public_edited <- read_sav("~/CPTR-NRSG 741/HINTS4-Cycle2-SPSS/hints4cycle2_09062017_public_edited.sav")
+library(tableone)
+library(foreign)
+hints4cycle2_09062017_public_edited <- read_sav("~/CPTR-NRSG 741/FInal-Project/hints4cycle2_09062017_public_edited.sav")
+hints4cycle2_foreign_factor <-read.spss("~/CPTR-NRSG 741/HINTS4-Cycle2-SPSS/hints4cycle2_09062017_public.sav", use.value.labels = TRUE, to.data.frame = TRUE) 
+
+hints4cycle2_foreign_df <- read.spss("~/CPTR-NRSG 741/HINTS4-Cycle2-SPSS/hints4cycle2_09062017_public.sav", use.value.labels = FALSE, to.data.frame = TRUE)
+
 hints4cycle2 <- hints4cycle2_09062017_public_edited
 ```
-These data are from the Health Information National Trends Survey (HINTS)data from the National Cancer Institute.  I chose HINTS 4 Cycle 2 as a starting point for these analyses because it had questions on BMI, cancer history, questions pertaining to screening history and information on diet and exercise. I am interested in exploring relationships between healthy lifestyle behaviors and incidence of prostate cancer in people with and without a family history. 
+*Introduction*
 
-This loaded dataset was simplified in SPSS before importing to R.
+There is extensive epidemiological evidence that the amount of fruit and vegetable intake has an impact on cancer prevention particularly with cancers of the digestive system. However, the differences in behavior between those that have cancer and those that just have a family history of cancer is not known. In this paper, we will investigate the differences in servings per day of fruit and vegetables and minutes of physical activity between these two groups.
+
+These data are from the Health Information National Trends Survey (HINTS)data from the National Cancer Institute.  I chose HINTS 4 Cycle 2 as a starting point for these analyses because it had questions on BMI, cancer history, questions pertaining to screening history and information on diet and exercise. I initially was interested in exploring relationships between healthy lifestyle behaviors and incidence of prostate cancer in people with and without a family history. However, there are few in the dataset that have or have had prostate cancer, therefore I am expanding the question to differences between family history of any cancer to those that have or have had any cancer. In the future, these may be better limited to those with digestive tract cancers since this is where the most evidence lies about fruit and vegetable intake.
+
+*Methods*
+
+Data
+
+The HINTS data is a nationwide and population-based cross-sectional computer-assisted telephone survey that collects various cancer-related information, focusing on health technology and communication. It is not conducted every year and not all questions are continued each year. HINTS 4 Cycle 2 was conducted in 2012 and contained questions about cancer history, body mass index, fruit and vegetable intake and physical activity habits in adults aged 18 or older.
+
+Study population
+
+I included all participants that answered yes to either having a family history of cancer or having had cancer currently or in the past. I realize there could be a cohort of cancer patients with a family history, but this will be left for future analyses. XX were excluded from the sample because of missing. The American Cancer Society recommends meeting the Physical Activity Guidelines of 150 minutes of moderate intensity or 75 minutes of vigorous intensity aerobic activity per week (no mention of strength training) and consuming at least 2.5 cups of fruits and vegetables per day, which is less than the USDA recommendations. I further restricted the data to exclude those missing physical activity and fruit and vegetable serving information (fruit missing n= 135, vegetable missing n= 134). The physical activity variable is calculated from two variables in the dataset. The first question asks "In a typical week, how many days do you do any physical activity of at least moderate intensity?" (missing = 16)and the next question is "On the days that you do any physical activity or exercise of at least moderate intensity, how long ar you typically doing these activities?"(missing n=70)This question is in hours and minutes, the hours variable is converted to minutes and added to the minute variable, then mulitplied by the number of days per week. It is known that education level can mediate fruit and vegetable intake and physical activity level, so this was used as a covariate. Age and smoking status were also used as covariates. Smoking behavior questions are limited in the HINTS surveys, but there is a recoded variable available called smokeStat. This combines two variables were used to determine current smoking status. The question "Have you smoked at least 100 cigarettes in your entire life?" was used to define never smokers and "How often do you now smoke cigarettes?" was used to define this smoke Stat variable. Education is categorized by less than high school, high school graduate, some college and college graduate or higher (missing n= 89). The variables Fruit and Vegetables were combined to compare with ACS recommendations and are reported in cups. This loaded dataset was simplified in SPSS before importing to R. Missing data are coded in a variety of ways in this dataset. Most ways are with a negative number of some kind. I recoded them as NA, so they would be ignored when used in physical activity calculations.
+
+Statistical Analysis
+
+All results are displayed as unweighted population estimates and were conducted using R version 3.6.1 (2019). Univariate analysis included tests to determine the differences between demographics and health behavior variables differed between those with a family history of cancer and those that have had or currently have cancer. Then to determine association between cancer status and fruit and vegetable intake and then physical activity I used a multivariate logistic regression model that controlled for statistically significant or clinically meaningful variables. The two models were compared using ROC curves and confusion matrices.
 
 ```{r}
-# Now to explore
+#Data Wrangling
 
-class(hints4cycle2)
-dim(hints4cycle2)
+
+#subset full dataset for just the variables I need
+hints_factor <- select(hints4cycle2_foreign_factor, FamilyEverHadCancer, EverHadCancer, CaProstate, smokeStat, Education, HowLongModerateExerciseMn, HowLongModerateExerciseHr, TimesModerateExercise, Fruit, Vegetables, GenderC, MaritalStatus, HHInc, RaceEthn, Age)
+
+hints_df <- select(hints4cycle2_foreign_df, FamilyEverHadCancer, EverHadCancer, CaProstate, smokeStat, Education, HowLongModerateExerciseMn, HowLongModerateExerciseHr, TimesModerateExercise, Fruit, Vegetables, GenderC, MaritalStatus, HHInc, RaceEthn, Age)
+
+#Recoding missing values
+# new variables
+# These now have no negative missing codes, all missing are set to NA
+
+
+hints2_factor <- hints_factor %>%
+  mutate(ExerciseModMn0 = ifelse(HowLongModerateExerciseMn < 0, NA, HowLongModerateExerciseMn),
+         ExerciseModHr0 = ifelse(HowLongModerateExerciseHr < 0, NA, HowLongModerateExerciseHr),
+         ExerciseModDays0 = ifelse(TimesModerateExercise < 1, NA, TimesModerateExercise),
+         Education0 = ifelse(Education < 0, NA, Education),
+         smokeStat0 = ifelse(smokeStat < 0, NA, smokeStat),
+         CaProstate0 = ifelse(CaProstate < 0, NA, CaProstate),
+         FamilyEverHadCancer0 = ifelse(FamilyEverHadCancer < 0, NA, FamilyEverHadCancer),
+         Fruit0 = ifelse(Fruit < 0, NA, Fruit),
+         Vegetables0 = ifelse(Vegetables < 0, NA, Vegetables),
+         EverHadCancer0 = ifelse(EverHadCancer < 0, NA, EverHadCancer), 
+         GenderC0 = ifelse(GenderC < 0, NA, GenderC),
+         MaritalStatus0 = ifelse(MaritalStatus < 0, NA, MaritalStatus),
+         HHInc0 = ifelse(HHInc < 0, NA, HHInc),
+         RaceEthn0 = ifelse(RaceEthn < 0, NA, RaceEthn),
+         Age0 = ifelse(as.numeric(Age) < 0, NA, Age))
+
+hints2_df <- hints_df %>%
+  mutate(ExerciseModMn0 = ifelse(HowLongModerateExerciseMn < 0, NA, HowLongModerateExerciseMn),
+         ExerciseModHr0 = ifelse(HowLongModerateExerciseHr < 0, NA, HowLongModerateExerciseHr),
+         ExerciseModDays0 = ifelse(TimesModerateExercise < 1, NA, TimesModerateExercise),
+         Education0 = ifelse(Education < 0, NA, Education),
+         smokeStat0 = ifelse(smokeStat < 0, NA, smokeStat),
+         CaProstate0 = ifelse(CaProstate < 0, NA, CaProstate),
+         FamilyEverHadCancer0 = ifelse(FamilyEverHadCancer < 0, NA, FamilyEverHadCancer),
+         Fruit0 = ifelse(Fruit < 0, NA, Fruit),
+         Vegetables0 = ifelse(Vegetables < 0, NA, Vegetables),
+         EverHadCancer0 = ifelse(EverHadCancer < 0, NA, EverHadCancer), 
+         GenderC0 = ifelse(GenderC < 0, NA, GenderC),
+         MaritalStatus0 = ifelse(MaritalStatus < 0, NA, MaritalStatus),
+         HHInc0 = ifelse(HHInc < 0, NA, HHInc),
+         RaceEthn0 = ifelse(RaceEthn < 0, NA, RaceEthn),
+         Age0 = ifelse(as.numeric(Age) < 0, NA, Age))
+        # CancerStatus = ifelse(FamilyEverHadCancer0 = 1 + EverHadCancer0 = 2, CancerStatus <- 0),
+        # CancerStatus = ifelse(FamilyEverHadCancer0 = 2 + EverHadCancer0 = 1, CancerStatus <- 1))
+
+#Fruit and Vegetables need to be added together to create a new variable to compare to the guidelines in cups
+
+# Calculate exercise and compare to the PA guidelines 
+
+hints_addvars <- hints2_df %>%
+  mutate(totalmin = (ExerciseModMn0 + (ExerciseModHr0*60)) * ExerciseModDays0)
+hints_addvars2 <- hints_addvars %>%
+  mutate(FruitVeg0 = Fruit0 + Vegetables0)
+
+
+
 ```
 
-There are 3630 observations in this dataset. For now we will limit the dataset to only those that have or had prostate cancer.
+```{r}
+# split into training and testing dataset
+
+# First for Family history
+# generate random numbers uniform distribution
+# from 0 to 1 for every row in dataset
+set.seed(20170208)
+hints_addvars2$group <- runif(length(hints_addvars2$FamilyEverHadCancer0), 
+                      min = 0, max = 1)
+# plot of random numbers
+hist(hints_addvars2$group)
+
+# split dataset into training (80% of data)
+# and testing (20% of data)
+hintsFhx.train <- subset(hints_addvars2, group <= 0.80)
+hintsFhx.test <- subset(hints_addvars2, group > 0.80)
+
+# Then for Ever had cancer
+
+set.seed(20170209)
+hints_addvars2$group2 <- runif(length(hints_addvars2$EverHadCancer0), 
+                      min = 0, max = 1)
+# plot of random numbers
+hist(hints_addvars2$group2)
+
+# split dataset into training (80% of data)
+# and testing (20% of data)
+hintsHad.train <- subset(hints_addvars2, group2 <= 0.80)
+hintsHad.test <- subset(hints_addvars2, group2 > 0.80)
+```
 
 ```{r}
-hints4cycle2 %>%
+# Table 1
+head(hints2_df)
+#list numerically coded categorical variables
+factorVars <- c( "smokeStat", "GenderC", "Education", "MaritalStatus",  "RaceEthn", "HHInc")
+#Creating variable list
+vars <- c("Age", "GenderC", "RaceEthn", "MaritalStatus","Education", "HHInc",  "smokeStat", "Fruit", "Vegetables" )
+
+tableOne <- CreateTableOne(vars = vars, data = hints2_factor, factorVars = factorVars, padColnames = TRUE)
+kableone(tableOne, showAlllevels = TRUE)
+```
+
+
+
+```{r}
+hints4cycle2_foreign_df %>%
  filter(CaProstate == 1) %>%
  nrow()
 ```
 There are 60 participants that have or had prostate cancer. We'll now look at of those 60 who has a family history of cancer.
 
 ```{r}
-hints4cycle2 %>%
+hints4cycle2_foreign_df %>%
  filter(CaProstate == 1) %>%
   filter(FamilyEverHadCancer == 1) %>%
  nrow()
@@ -46,14 +167,14 @@ Well, the majority of those who have/had prostate cancer also had a family histo
 
 ```{r}
 #fruit intake  (3 = at least 2 cups)
-hints4cycle2 %>%
+hints4cycle2_foreign_df %>%
  filter(CaProstate == 1) %>%
   filter(Fruit == 3) %>%
   nrow ()
 ```
 ```{r}
 #vegetable intake (4 = at least 3 cups)
-hints4cycle2 %>%
+hints4cycle2_foreign_df %>%
  filter(CaProstate == 1) %>%
   filter(Vegetables == 4) %>%
   nrow ()
@@ -62,16 +183,14 @@ So we have poor fruit and vegetable intake, not suprising, how are they doing wi
 
 ```{r}
 # First we have to calculate whether they meet the PA guidelines 
-#meetExGuide <- 0
- # for(PersonID in hints4cycle2) {
-  #  meetExGuide <- hints4cycle2$TimesModerateExercise * hints4cycle2$HowLongModerateExerciseHr
-  #}  
-# print(meetExGuide)
+
+hints_addvars <- hints4cycle2_foreign_df %>%
+  mutate(totalmin = (HowLongModerateExerciseMn + (HowLongModerateExerciseHr*60)) * TimesModerateExercise)
 
 #exercise (moderate by hour)
-hints4cycle2 %>%
+hints_addvars %>%
  filter(CaProstate == 1) %>%
-  filter(HowLongModerateExerciseHr > 2) %>%
+  filter(totalmin > 150) %>%
   nrow ()
 ```
 Not many...
@@ -79,14 +198,14 @@ Not many...
 Now let's look at those with a family history of cancer but have not had cancer yet.
 
 ```{r}
-hints4cycle2 %>%
+hints_addvars %>%
   filter(FamilyEverHadCancer == 1) %>%
   filter(EverHadCancer == 2)%>%
  nrow()
 ```
 ```{r}
 #fruit intake  (3 = at least 2 cups)
-hints4cycle2 %>%
+hints_addvars %>%
  filter(FamilyEverHadCancer == 1) %>%
   filter(EverHadCancer == 2)%>%
   filter(Fruit == 3) %>%
@@ -94,7 +213,7 @@ hints4cycle2 %>%
 ```
 ```{r}
 #vegetable intake  (4 = at least 3 cups)
-hints4cycle2 %>%
+hints_addvars %>%
  filter(FamilyEverHadCancer == 1) %>%
   filter(EverHadCancer == 2)%>%
   filter(Vegetables == 4) %>%
@@ -102,24 +221,28 @@ hints4cycle2 %>%
 ```
 ```{r}
 #exercise
-hints4cycle2 %>%
+hints_addvars %>%
  filter(FamilyEverHadCancer == 1) %>%
   filter(EverHadCancer == 2)%>%
-   filter(HowLongModerateExerciseHr > 2) %>%
+   filter(totalmin > 150) %>%
   nrow ()
 ```
 
 ```{r}
-hints4cycle2$EverHadCancer <- as.numeric(hints4cycle2$EverHadCancer)
-ggplot(hints4cycle2, aes(x=Fruit, y=Vegetables, color=EverHadCancer)) 
+ggplot(hints_addvars, aes(Fruit)) +
+  geom_histogram()
 ```
 
-## Including Plots
-
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
+```{r}
+ggplot(hints_addvars, aes(x=Age, y=totalmin, color = as.factor(EverHadCancer))) + 
+  geom_point()
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+
+My research question will be: Is there a difference between fruit and vegetable intake and exercise habits between those with prostate cancer vs those with a family history. This will be a univariate t-test at first. Then I could possibly control for age, smoking status, and education.
+
+
+Results
+
+There are 3630 total survey participants in these data. 
