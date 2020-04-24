@@ -16,6 +16,8 @@ library(haven)
 library(tableone)
 library(foreign)
 library(GGally)
+library(ROCR)
+library(pROC)
 hints4cycle2_09062017_public_edited <- read_sav("~/CPTR-NRSG 741/FInal-Project/hints4cycle2_09062017_public_edited.sav")
 hints4cycle2_foreign_factor <-read.spss("~/CPTR-NRSG 741/HINTS4-Cycle2-SPSS/hints4cycle2_09062017_public.sav", use.value.labels = TRUE, to.data.frame = TRUE) 
 
@@ -29,9 +31,9 @@ hints4cycle2 <- hints4cycle2_09062017_public_edited
 #Data Wrangling
 
 #subset full dataset for just the variables I need
-hints_factor <- select(hints4cycle2_foreign_factor, FamilyEverHadCancer, EverHadCancer, CaProstate, smokeStat, Education, HowLongModerateExerciseMn, HowLongModerateExerciseHr, TimesModerateExercise, Fruit, Vegetables, GenderC, MaritalStatus, HHInc, RaceEthn, Age)
+hints_factor <- select(hints4cycle2_foreign_factor, FamilyEverHadCancer, EverHadCancer, CaProstate, smokeStat, Education, HowLongModerateExerciseMn, HowLongModerateExerciseHr, TimesModerateExercise, TimesStrengthTraining, Fruit, Vegetables, GenderC, MaritalStatus, HHInc, RaceEthn, Age)
 
-hints_df <- select(hints4cycle2_foreign_df, FamilyEverHadCancer, EverHadCancer, CaProstate, smokeStat, Education, HowLongModerateExerciseMn, HowLongModerateExerciseHr, TimesModerateExercise, Fruit, Vegetables, GenderC, MaritalStatus, HHInc, RaceEthn, Age)
+hints_df <- select(hints4cycle2_foreign_df, FamilyEverHadCancer, EverHadCancer, CaProstate, smokeStat, Education, HowLongModerateExerciseMn, HowLongModerateExerciseHr, TimesModerateExercise, TimesStrengthTraining, Fruit, Vegetables, GenderC, MaritalStatus, HHInc, RaceEthn, Age)
 
 #Recoding missing values
 # new variables
@@ -42,6 +44,7 @@ hints2_factor <- hints_factor %>%
   mutate(ExerciseModMn0 = ifelse(HowLongModerateExerciseMn < 0, NA, HowLongModerateExerciseMn),
          ExerciseModHr0 = ifelse(HowLongModerateExerciseHr < 0, NA, HowLongModerateExerciseHr),
          ExerciseModDays0 = ifelse(TimesModerateExercise < 1, NA, TimesModerateExercise),
+         TimesStrengthTraining0 = ifelse(TimesStrengthTraining < 0, NA, TimesStrengthTraining),
          Education0 = ifelse(Education < 0, NA, Education),
          smokeStat0 = ifelse(smokeStat < 0, NA, smokeStat),
          CaProstate0 = ifelse(CaProstate < 0, NA, CaProstate),
@@ -59,6 +62,7 @@ hints2_df <- hints_df %>%
   mutate(ExerciseModMn0 = ifelse(HowLongModerateExerciseMn < 0, NA, HowLongModerateExerciseMn),
          ExerciseModHr0 = ifelse(HowLongModerateExerciseHr < 0, NA, HowLongModerateExerciseHr),
          ExerciseModDays0 = ifelse(TimesModerateExercise < 1, NA, TimesModerateExercise),
+         TimesStrengthTraining0 = ifelse(TimesStrengthTraining < 0, NA, TimesStrengthTraining),
          Education0 = ifelse(Education < 0, NA, Education),
          smokeStat0 = ifelse(smokeStat < 0, NA, smokeStat),
          CaProstate0 = ifelse(CaProstate < 0, NA, CaProstate),
@@ -81,20 +85,6 @@ hints_addvars <- hints2_df %>%
   mutate(totalmin = (ExerciseModMn0 + (ExerciseModHr0*60)) * ExerciseModDays0)
 hints_addvars2 <- hints_addvars %>%
   mutate(FruitVeg0 = Fruit0 + Vegetables0)
-
-hints_addvars2 <- hints_addvars2 %>%
-  mutate(totalminOut = totalmin < 1000)
-
-# Identifying outliers in totalmin
-box <- ggplot(hints_addvars2, aes(x = ExerciseModHr0,y = totalminOut))+ geom_boxplot()
-box
-boxplot(hints_addvars2)$totalmin
-Q <- quantile(hints_addvars2$totalmin0, probs=c(.25, .75), na.rm = FALSE)
-iqr <- IQR(hints_addvars2$totalmin0)
-up <-  Q[2]+1.5*iqr # Upper Range  
-low<- Q[1]-1.5*iqr # Lower Range
-hints_addvars2 <- hints_addvars2 %>%
-  mutate(as.numeric(totalminOut) == totalmin > (Q[1] - 1.5*iqr) & totalmin < (Q[2]+1.5*iqr))
 
 ```
 
@@ -122,23 +112,18 @@ head(hints2_df)
 #list numerically coded categorical variables
 factorVars <- c( "smokeStat", "GenderC", "Education", "MaritalStatus",  "RaceEthn", "HHInc")
 #Creating variable list
-vars <- c("Age", "GenderC", "RaceEthn", "MaritalStatus","Education", "HHInc",  "smokeStat", "Fruit", "Vegetables", "totalmin" )
+vars <- c("Age", "GenderC", "RaceEthn", "MaritalStatus","Education", "HHInc",  "smokeStat", "Fruit", "Vegetables", "TimesModerateExercise", "TimesStrengthTraining" )
 
-tableOne <- CreateTableOne(vars = vars,  data = hints_addvars2, factorVars = factorVars)
+tableOne <- CreateTableOne(vars = vars,  data = hints_addvars2, strata = c("EverHadCancer0"), factorVars = factorVars)
 kableone(tableOne)
-#strata = c("EverHadCancer0"),
 
 tableTwo <- CreateTableOne(vars = vars, strata = c("FamilyEverHadCancer0"), data = hints_addvars2, factorVars = factorVars)
 kableone(tableTwo)
 
-
-#strata = "EverHadCancer",
 ```
 
 ```{r}
 #Figure 1 coding
-
-
 
 ggplot(hints_addvars2, aes(as.character(FamilyEverHadCancer0)))+ geom_bar(stat="count") + 
   xlab("Family History of Cancer")+
@@ -156,7 +141,7 @@ ggplot(hints_addvars2, aes(as.character(EverHadCancer0))) + geom_bar(stat="count
 ```{r}
 #Figure 2 Coding
 Fig2 <- hints_addvars2 %>%
-  select(EverHadCancer0, FruitVeg0, totalmin, Education0, smokeStat0, Age0)
+  select(EverHadCancer0, FruitVeg0, ExerciseModDays0, TimesStrengthTraining0, Education0, smokeStat0, Age0)
 
 ggpairs(Fig2, aes(color=as.character(EverHadCancer0)))
 ```
@@ -164,42 +149,61 @@ ggpairs(Fig2, aes(color=as.character(EverHadCancer0)))
 
 
 ```{r}
-
-
 #Family History model training set
 
 FHxmodtrainFV <- glm(as.factor(FamilyEverHadCancer0) ~ FruitVeg0 + Education0 + Age0 + smokeStat0, data = hints.train, family = binomial)
 summary(FHxmodtrainFV)
 exp(coef(FHxmodtrainFV))
+exp(confint(FHxmodtrainFV))
 
-FHxmodtrainEx <- glm(as.factor(FamilyEverHadCancer0) ~ totalmin + Education0 + Age0 + smokeStat0, data = hints.train, family = binomial)
+FHxmodtrainEx <- glm(as.factor(FamilyEverHadCancer0) ~ ExerciseModDays0 + Education0 + Age0 + smokeStat0, data = hints.train, family = binomial)
 summary(FHxmodtrainEx)
 exp(coef(FHxmodtrainEx))
+exp(confint(FHxmodtrainEx))
 
 #prediction probabilities
 FHxFV.predict <- predict(FHxmodtrainFV, newdata = hints.test, type="response")
 plot(hints.test$FruitVeg0,FHxFV.predict)
-abline(0.5, 0, col = "red")
+abline(0.2, 0, col = "red")
 
 FHxEx.predict <- predict(FHxmodtrainEx, newdata = hints.test, type="response")
-plot(hints.test$totalmin,FHxEx.predict)
-abline(0.5, 0, col = "red")
+plot(hints.test$ExerciseModDays0,FHxEx.predict)
+abline(0.2, 0, col = "red")
 
 #confusion matrices
-table(hints.test$FamilyEverHadCancer0, FHxFV.predict > 0.5)
+table(as.factor(hints.test$FamilyEverHadCancer0), FHxFV.predict > 0.2)
 
-table(hints.test$FamilyEverHadCancer0, FHxEx.predict > 0.5)
+table(as.factor(hints.test$FamilyEverHadCancer0), FHxEx.predict > 0.2)
+
+#ROC curves
+
+p <- predict(FHxmodtrainFV, newdata = hints.test, 
+             type="response")
+roccurve.FHxFV <- roc(hints.test$FamilyEverHadCancer0 ~ p)
+plot(roccurve.FHxFV)
+auc(roccurve.FHxFV)
+
+p <- predict(FHxmodtrainEx, newdata = hints.test, 
+             type="response")
+roccurve.FHxEx <- roc(hints.test$FamilyEverHadCancer0 ~ p)
+plot(roccurve.FHxEx)
+auc(roccurve.FHxEx)
+
+
+
 ```
 ```{r}
 #Current Cancer model training set
 
-CamodtrainFV <- glm(EverHadCancer0 ~ FruitVeg0 + Education0 + Age0 + smokeStat0, data = hints.train, family = binomial)
+CamodtrainFV <- glm(as.factor(EverHadCancer0) ~ FruitVeg0 + Education0 + Age0 + smokeStat0, data = hints.train, family = binomial)
 summary(CamodtrainFV)
 exp(coef(CamodtrainFV))
+exp(confint(CamodtrainFV))
 
-CamodtrainEx <- glm(EverHadCancer0 ~ totalmin + Education0 + Age0 + smokeStat0, data = hints.train, family = binomial)
+CamodtrainEx <- glm(as.factor(EverHadCancer0) ~ ExerciseModDays0 + Education0 + Age0 + smokeStat0, data = hints.train, family = binomial)
 summary(CamodtrainEx)
 exp(coef(CamodtrainEx))
+exp(confint(CamodtrainEx))
 
 #prediction probabilities
 CaFV.predict <- predict(CamodtrainFV, newdata = hints.test, type="response")
@@ -207,28 +211,24 @@ plot(hints.test$FruitVeg0,CaFV.predict)
 abline(0.5, 0, col = "red")
 
 CaEx.predict <- predict(CamodtrainEx, newdata = hints.test, type="response")
-plot(hints.test$totalmin,CaEx.predict)
+plot(hints.test$ExerciseModDays0,CaEx.predict)
 abline(0.5, 0, col = "red")
 
 #confusion matrices
 table(hints.test$EverHadCancer0, CaFV.predict > 0.5)
 
 table(hints.test$EverHadCancer0, CaEx.predict > 0.5)
+
+#ROC curves
+p <- predict(CamodtrainFV, newdata = hints.test, 
+             type="response")
+roccurve.CaFV <- roc(hints.test$EverHadCancer0 ~ p)
+plot(roccurve.CaFV)
+auc(roccurve.CaFV)
+
+p <- predict(CamodtrainEx, newdata = hints.test, 
+             type="response")
+roccurve.CaEx <- roc(hints.test$EverHadCancer0 ~ p)
+plot(roccurve.CaEx)
+auc(roccurve.CaEx)
 ```
-
-
-```{r}
-ggplot(hints_addvars, aes(Fruit)) +
-  geom_histogram()
-```
-
-```{r}
-ggplot(hints_addvars, aes(x=Age, y=totalmin, color = as.factor(EverHadCancer))) + 
-  geom_point()
-```
-
-
-
-
-
-
